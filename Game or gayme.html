@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOREST SURVIVOR — Sobrevive la Noche</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0f0a; overflow: hidden; font-family: 'Courier New', monospace; }
+  #canvas { display: block; }
+  
+  #ui {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 10;
+  }
+
+  #hud {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 20px; align-items: flex-end;
+  }
+
+  .stat-box {
+    background: rgba(0,0,0,0.7);
+    border: 1px solid rgba(100,200,100,0.3);
+    border-radius: 4px;
+    padding: 8px 14px;
+    min-width: 100px;
+    backdrop-filter: blur(4px);
+  }
+  .stat-label {
+    font-size: 9px; letter-spacing: 2px; color: #5a8a5a;
+    text-transform: uppercase; margin-bottom: 4px;
+  }
+  .stat-bar {
+    height: 6px; background: #1a2a1a; border-radius: 3px; overflow: hidden;
+  }
+  .stat-fill {
+    height: 100%; border-radius: 3px; transition: width 0.3s;
+  }
+  #health-fill { background: linear-gradient(90deg, #ff4444, #ff8844); }
+  #hunger-fill { background: linear-gradient(90deg, #aa8833, #ffcc44); }
+  #fuel-fill { background: linear-gradient(90deg, #3388ff, #44ddff); }
+  #stamina-fill { background: linear-gradient(90deg, #44ff88, #88ffcc); }
+
+  .stat-val { font-size: 11px; color: #aaffaa; margin-top: 3px; }
+
+  #flashlight-icon {
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,220,100,0.5);
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    transition: all 0.3s;
+  }
+  #flashlight-icon.on {
+    border-color: #ffdd44;
+    box-shadow: 0 0 20px rgba(255,220,50,0.6);
+    background: rgba(50,40,0,0.7);
+  }
+
+  #minimap {
+    position: fixed; top: 20px; right: 20px;
+    width: 180px; height: 180px;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(100,200,100,0.3);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  #minimap canvas { width: 100%; height: 100%; }
+  #minimap-label {
+    position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+    font-size: 8px; color: #4a7a4a; letter-spacing: 2px;
+  }
+
+  #alerts {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; flex-direction: column; gap: 8px; align-items: center;
+  }
+  .alert {
+    background: rgba(0,0,0,0.85);
+    border: 1px solid rgba(255,100,100,0.5);
+    color: #ffaaaa; padding: 8px 20px;
+    font-size: 11px; letter-spacing: 2px;
+    border-radius: 3px; animation: fadeAlert 3s forwards;
+  }
+  .alert.info { border-color: rgba(100,200,100,0.5); color: #aaffaa; }
+  .alert.warn { border-color: rgba(255,200,50,0.5); color: #ffdd88; }
+  @keyframes fadeAlert {
+    0%{opacity:0;transform:translateY(-10px)}
+    15%{opacity:1;transform:translateY(0)}
+    70%{opacity:1}
+    100%{opacity:0}
+  }
+
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 20px; height: 20px; pointer-events: none;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(200,255,200,0.7);
+    border-radius: 2px;
+  }
+  #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+  #crosshair::after { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+
+  #controls-hint {
+    position: fixed; bottom: 100px; left: 20px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(100,200,100,0.2);
+    padding: 12px 16px; font-size: 10px;
+    color: #4a7a4a; line-height: 1.8; border-radius: 4px;
+  }
+  #controls-hint span { color: #88cc88; }
+
+  #overlay {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,30,0,0.95) 0%, rgba(0,0,0,0.99) 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; transition: opacity 0.8s;
+  }
+  #overlay h1 {
+    font-size: 52px; font-weight: 900; letter-spacing: 8px;
+    color: #33ff66;
+    text-shadow: 0 0 40px rgba(50,255,100,0.5), 0 0 80px rgba(50,255,100,0.2);
+    margin-bottom: 8px;
+  }
+  #overlay p.subtitle {
+    color: #4a7a4a; font-size: 12px; letter-spacing: 5px;
+    margin-bottom: 50px;
+  }
+  #overlay .desc {
+    color: #668866; font-size: 13px; max-width: 500px;
+    text-align: center; line-height: 1.8; margin-bottom: 40px;
+  }
+  #overlay .desc strong { color: #99cc99; }
+  #start-btn {
+    background: transparent;
+    border: 1px solid #33ff66;
+    color: #33ff66; font-family: inherit;
+    font-size: 13px; letter-spacing: 4px;
+    padding: 14px 40px; cursor: pointer;
+    pointer-events: all;
+    text-transform: uppercase;
+    transition: all 0.3s;
+    box-shadow: 0 0 20px rgba(50,255,100,0.2);
+  }
+  #start-btn:hover {
+    background: rgba(50,255,100,0.1);
+    box-shadow: 0 0 40px rgba(50,255,100,0.4);
+  }
+
+  #gameover {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.95);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  #gameover h2 { font-size: 48px; color: #ff4444; letter-spacing: 6px; margin-bottom: 20px; }
+  #gameover p { color: #884444; font-size: 13px; margin-bottom: 40px; letter-spacing: 2px; }
+  #restart-btn {
+    background: transparent; border: 1px solid #ff4444; color: #ff4444;
+    font-family: inherit; font-size: 12px; letter-spacing: 4px;
+    padding: 12px 36px; cursor: pointer; pointer-events: all; transition: all 0.3s;
+  }
+  #restart-btn:hover { background: rgba(255,50,50,0.1); }
+
+  #sleep-overlay {
+    position: fixed; inset: 0; background: #000;
+    display: none; align-items: center; justify-content: center;
+    z-index: 50; flex-direction: column; gap: 16px;
+  }
+  #sleep-overlay p { color: #334433; font-size: 14px; letter-spacing: 4px; }
+  #sleep-overlay .night-num { color: #557755; font-size: 36px; }
+
+  #interact-prompt {
+    position: fixed; top: 60%; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.8); border: 1px solid rgba(255,220,100,0.4);
+    color: #ffdd88; font-size: 11px; letter-spacing: 2px;
+    padding: 6px 18px; border-radius: 3px; display: none; pointer-events: none;
+  }
+
+  #day-counter {
+    position: fixed; top: 20px; left: 20px;
+    background: rgba(0,0,0,0.7); border: 1px solid rgba(100,200,100,0.3);
+    padding: 8px 16px; border-radius: 4px;
+  }
+  #day-counter .day-label { font-size: 9px; color: #4a7a4a; letter-spacing: 2px; }
+  #day-counter .day-val { font-size: 20px; color: #88ff88; font-weight: bold; }
+
+  #time-bar-wrap {
+    position: fixed; top: 70px; left: 20px;
+    background: rgba(0,0,0,0.7); border: 1px solid rgba(100,200,100,0.3);
+    padding: 8px 16px; border-radius: 4px; min-width: 130px;
+  }
+  .time-label { font-size: 9px; color: #4a7a4a; letter-spacing: 2px; margin-bottom: 4px; }
+  #time-bar { height: 4px; background: #1a2a1a; border-radius: 2px; overflow: hidden; }
+  #time-fill { height: 100%; background: linear-gradient(90deg, #223355, #ffdd88, #223355);
+    border-radius: 2px; transition: width 0.5s; }
+  #time-txt { font-size: 11px; color: #88aaff; margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui">
+  <div id="crosshair"></div>
+
+  <div id="day-counter">
+    <div class="day-label">DÍA</div>
+    <div class="day-val" id="day-val">1</div>
+  </div>
+
+  <div id="time-bar-wrap">
+    <div class="time-label">CICLO</div>
+    <div id="time-bar"><div id="time-fill" style="width:50%"></div></div>
+    <div id="time-txt">12:00</div>
+  </div>
+
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="180" height="180"></canvas>
+    <div id="minimap-label">MAPA</div>
+  </div>
+
+  <div id="hud">
+    <div class="stat-box">
+      <div class="stat-label">Salud</div>
+      <div class="stat-bar"><div class="stat-fill" id="health-fill" style="width:100%"></div></div>
+      <div class="stat-val" id="health-val">100</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Hambre</div>
+      <div class="stat-bar"><div class="stat-fill" id="hunger-fill" style="width:100%"></div></div>
+      <div class="stat-val" id="hunger-val">100</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Gasolina</div>
+      <div class="stat-bar"><div class="stat-fill" id="fuel-fill" style="width:0%"></div></div>
+      <div class="stat-val" id="fuel-val">0/100</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Stamina</div>
+      <div class="stat-bar"><div class="stat-fill" id="stamina-fill" style="width:100%"></div></div>
+      <div class="stat-val" id="stamina-val">100</div>
+    </div>
+    <div class="stat-box" style="text-align:center">
+      <div class="stat-label">Linterna</div>
+      <div id="flashlight-icon">🔦</div>
+    </div>
+  </div>
+
+  <div id="controls-hint">
+    <span>WASD</span> — Mover<br>
+    <span>SHIFT</span> — Correr<br>
+    <span>F</span> — Linterna<br>
+    <span>E</span> — Interactuar<br>
+    <span>ESC</span> — Cursor
+  </div>
+
+  <div id="alerts"></div>
+  <div id="interact-prompt"></div>
+</div>
+
+<div id="overlay">
+  <h1>FOREST SURVIVOR</h1>
+  <p class="subtitle">SOBREVIVE LA NOCHE</p>
+  <div class="desc">
+    Estás atrapado en un <strong>bosque oscuro</strong>.<br>
+    Encuentra <strong>gasolina</strong> para encender los generadores.<br>
+    Evita a los <strong>vigilantes</strong> y duerme en los refugios.<br>
+    Sobrevive tantos días como puedas.
+  </div>
+  <button id="start-btn" onclick="startGame()">COMENZAR</button>
+</div>
+
+<div id="gameover">
+  <h2>HAS MUERTO</h2>
+  <p id="gameover-reason">...</p>
+  <button id="restart-btn" onclick="restartGame()">REINTENTAR</button>
+</div>
+
+<div id="sleep-overlay">
+  <p>DURMIENDO...</p>
+  <div class="night-num" id="sleep-day-num">Día 2</div>
+  <p style="font-size:11px;color:#335533">Los vigilantes patrullan mientras descansas</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// FOREST SURVIVOR — Full 3D Game
+// ============================================================
+
+const W = window.innerWidth, H = window.innerHeight;
+const canvas = document.getElementById('canvas');
+
+// Scene
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.6;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a1a0a, 0.04);
+
+const camera = new THREE.PerspectiveCamera(75, W/H, 0.1, 200);
+camera.position.set(0, 1.7, 0);
+
+// ---- GAME STATE ----
+let state = {
+  health: 100, hunger: 100, fuel: 0, stamina: 100,
+  flashlight: false, day: 1, timeOfDay: 0.5, // 0=midnight, 0.5=noon, 1=midnight
+  running: false, isDead: false, gameStarted: false,
+  sleepAnimating: false,
+  nearShelter: null, nearFuel: null, nearGenerator: null,
+  generatorPowered: false,
+  totalFuelCollected: 0
+};
+
+const keys = {};
+let yaw = 0, pitch = 0;
+let pointerLocked = false;
+
+// ---- WORLD ----
+const MAP_SIZE = 120;
+
+// Sky / Ambient
+const ambientLight = new THREE.AmbientLight(0x112211, 0.3);
+scene.add(ambientLight);
+
+// Moon/Sun directional
+const sunLight = new THREE.DirectionalLight(0x8899ff, 0.5);
+sunLight.position.set(50, 80, 30);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 200;
+sunLight.shadow.camera.left = -80;
+sunLight.shadow.camera.right = 80;
+sunLight.shadow.camera.top = 80;
+sunLight.shadow.camera.bottom = -80;
+scene.add(sunLight);
+
+// Flashlight
+const flashlight = new THREE.SpotLight(0xffffcc, 0, 30, Math.PI * 0.12, 0.3, 1.5);
+flashlight.castShadow = false;
+scene.add(flashlight);
+scene.add(flashlight.target);
+
+// ---- GROUND ----
+const groundGeo = new THREE.PlaneGeometry(MAP_SIZE*2, MAP_SIZE*2, 80, 80);
+// Slightly deform for terrain feel
+const pos = groundGeo.attributes.position;
+for(let i=0;i<pos.count;i++){
+  const x=pos.getX(i), z=pos.getZ(i);
+  pos.setY(i, Math.sin(x*0.08)*0.6 + Math.cos(z*0.07)*0.5 + Math.sin(x*0.2+z*0.15)*0.3);
+}
+groundGeo.computeVertexNormals();
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x1a3a1a });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Helper: get ground Y at (x,z)
+function getGroundY(x,z){
+  return Math.sin(x*0.08)*0.6 + Math.cos(z*0.07)*0.5 + Math.sin(x*0.2+z*0.15)*0.3;
+}
+
+// ---- TREES ----
+function makeTree(x,z,scale=1){
+  const g = new THREE.Group();
+  const trunkH = (3 + Math.random()*2)*scale;
+  const trunkGeo = new THREE.CylinderGeometry(0.18*scale, 0.28*scale, trunkH, 6);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3a2210 });
+  const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+  trunk.position.y = trunkH/2;
+  trunk.castShadow = true;
+  g.add(trunk);
+
+  const layers = 3 + Math.floor(Math.random()*2);
+  for(let l=0;l<layers;l++){
+    const r = (2.2 - l*0.5)*scale;
+    const h = (2.0 - l*0.3)*scale;
+    const lGeo = new THREE.ConeGeometry(r, h, 7);
+    const lMat = new THREE.MeshLambertMaterial({
+      color: new THREE.Color(0.05+Math.random()*0.04, 0.2+Math.random()*0.1, 0.05+Math.random()*0.04)
+    });
+    const leaf = new THREE.Mesh(lGeo, lMat);
+    leaf.position.y = trunkH*0.6 + l*h*0.65;
+    leaf.castShadow = true;
+    leaf.receiveShadow = true;
+    g.add(leaf);
+  }
+
+  const gy = getGroundY(x,z);
+  g.position.set(x, gy, z);
+  g.rotation.y = Math.random()*Math.PI*2;
+  scene.add(g);
+  return g;
+}
+
+const trees = [];
+const treePositions = [];
+for(let i=0;i<350;i++){
+  const ang = Math.random()*Math.PI*2;
+  const dist = 8 + Math.random()*(MAP_SIZE*0.95);
+  const x = Math.cos(ang)*dist;
+  const z = Math.sin(ang)*dist;
+  trees.push(makeTree(x,z, 0.7+Math.random()*0.8));
+  treePositions.push({x,z,r:2.5});
+}
+
+// ---- BUSHES ----
+function makeBush(x,z){
+  const g = new THREE.Group();
+  for(let b=0;b<3;b++){
+    const r = 0.5+Math.random()*0.5;
+    const geo = new THREE.SphereGeometry(r, 6, 5);
+    const mat = new THREE.MeshLambertMaterial({ color: 0x1d3d1d });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set((Math.random()-0.5)*1, r*0.5, (Math.random()-0.5)*1);
+    g.add(m);
+  }
+  g.position.set(x, getGroundY(x,z), z);
+  scene.add(g);
+}
+for(let i=0;i<200;i++){
+  const x=(Math.random()-0.5)*MAP_SIZE*1.8, z=(Math.random()-0.5)*MAP_SIZE*1.8;
+  makeBush(x,z);
+}
+
+// ---- ROCKS ----
+function makeRock(x,z){
+  const geo = new THREE.DodecahedronGeometry(0.4+Math.random()*0.6, 0);
+  const mat = new THREE.MeshLambertMaterial({ color: 0x445544 });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x, getGroundY(x,z)+0.2, z);
+  m.rotation.set(Math.random(),Math.random(),Math.random());
+  m.castShadow = true;
+  scene.add(m);
+}
+for(let i=0;i<80;i++){
+  const x=(Math.random()-0.5)*MAP_SIZE*1.8, z=(Math.random()-0.5)*MAP_SIZE*1.8;
+  makeRock(x,z);
+}
+
+// ---- SHELTERS ----
+const shelters = [];
+const shelterPositions = [
+  {x:15,z:-20},{x:-30,z:25},{x:40,z:10},{x:-15,z:-40},{x:0,z:35}
+];
+shelterPositions.forEach(sp => {
+  const g = new THREE.Group();
+  // Floor
+  const floorGeo = new THREE.BoxGeometry(5,0.1,4);
+  const floorMat = new THREE.MeshLambertMaterial({ color: 0x4a3220 });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.position.y = 0.05;
+  g.add(floor);
+  // Walls
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x5a4230 });
+  [[0,1,-2,5,2,0.1],[0,1,2,5,2,0.1],[2.5,1,0,0.1,2,4],[-2.5,1,0,0.1,2,4]].forEach(([x,y,z,w,h,d])=>{
+    const wg = new THREE.BoxGeometry(w,h,d);
+    const wm = new THREE.Mesh(wg, wallMat);
+    wm.position.set(x,y,z);
+    wm.castShadow = true;
+    g.add(wm);
+  });
+  // Roof
+  const roofGeo = new THREE.ConeGeometry(3.8,1.5,4);
+  const roofMat = new THREE.MeshLambertMaterial({ color: 0x3a2810 });
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.position.y = 2.75;
+  roof.rotation.y = Math.PI/4;
+  roof.castShadow = true;
+  g.add(roof);
+  // Lantern
+  const lanGeo = new THREE.SphereGeometry(0.15,8,6);
+  const lanMat = new THREE.MeshBasicMaterial({ color: 0xffcc44 });
+  const lan = new THREE.Mesh(lanGeo, lanMat);
+  lan.position.set(0,2.3,1.8);
+  g.add(lan);
+  const lanLight = new THREE.PointLight(0xffcc44, 0.8, 6);
+  lanLight.position.set(sp.x,getGroundY(sp.x,sp.z)+2.3,sp.z+1.8);
+  scene.add(lanLight);
+
+  g.position.set(sp.x, getGroundY(sp.x,sp.z), sp.z);
+  scene.add(g);
+  shelters.push({x:sp.x, z:sp.z, group:g, radius:4, active:false});
+});
+
+// ---- FUEL CANISTERS ----
+const fuelCanisters = [];
+const fuelPositions = [
+  {x:8,z:15},{x:-22,z:-10},{x:35,z:-15},{x:-40,z:20},{x:5,z:-30},
+  {x:20,z:40},{x:-10,z:50},{x:55,z:5},{x:-55,z:-10},{x:30,z:-50}
+];
+fuelPositions.forEach((fp,i) => {
+  const g = new THREE.Group();
+  const bodyGeo = new THREE.CylinderGeometry(0.3,0.35,0.8,8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.4;
+  g.add(body);
+  // Handle
+  const hGeo = new THREE.TorusGeometry(0.15,0.04,6,12,Math.PI);
+  const hMat = new THREE.MeshLambertMaterial({ color: 0x888888 });
+  const h = new THREE.Mesh(hGeo, hMat);
+  h.position.y = 0.85; h.rotation.z = Math.PI/2;
+  g.add(h);
+  // Glow when not collected
+  const glowLight = new THREE.PointLight(0xff3333, 0.5, 4);
+  glowLight.position.y = 0.5;
+  g.add(glowLight);
+
+  const gy = getGroundY(fp.x,fp.z);
+  g.position.set(fp.x, gy, fp.z);
+  scene.add(g);
+  fuelCanisters.push({x:fp.x, z:fp.z, group:g, radius:2, collected:false, glowLight, i});
+});
+
+// ---- GENERATOR ----
+const genPositions = [{x:0, z:0}, {x:-25,z:-25}];
+const generators = [];
+genPositions.forEach(gp => {
+  const g = new THREE.Group();
+  const mainGeo = new THREE.BoxGeometry(2,1.2,1);
+  const mainMat = new THREE.MeshLambertMaterial({ color: 0x666622 });
+  const main = new THREE.Mesh(mainGeo, mainMat);
+  main.position.y = 0.6;
+  g.add(main);
+  const topGeo = new THREE.BoxGeometry(1.5,0.3,0.8);
+  const topMat = new THREE.MeshLambertMaterial({ color: 0x444422 });
+  const top = new THREE.Mesh(topGeo, topMat);
+  top.position.y = 1.35;
+  g.add(top);
+  // Power indicator
+  const indGeo = new THREE.SphereGeometry(0.1,8,6);
+  const indMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const ind = new THREE.Mesh(indGeo, indMat);
+  ind.position.set(0.5,1.2,0.51);
+  g.add(ind);
+
+  const powerLight = new THREE.PointLight(0xff0000, 0.3, 5);
+  powerLight.position.set(gp.x,getGroundY(gp.x,gp.z)+1.2,gp.z);
+  scene.add(powerLight);
+
+  g.position.set(gp.x,getGroundY(gp.x,gp.z),gp.z);
+  scene.add(g);
+  generators.push({x:gp.x, z:gp.z, group:g, radius:3, powered:false, indMat, powerLight, ind});
+});
+
+// ---- GUARDS ----
+const guardData = [];
+const guardPaths = [
+  [{x:20,z:20},{x:30,z:20},{x:30,z:30},{x:20,z:30}],
+  [{x:-20,z:-20},{x:-10,z:-20},{x:-10,z:-30},{x:-20,z:-30}],
+  [{x:0,z:20},{x:15,z:20},{x:15,z:35},{x:0,z:35}],
+  [{x:-35,z:10},{x:-25,z:10},{x:-25,z:20},{x:-35,z:20}],
+];
+
+function makeGuard(pathPoints){
+  const g = new THREE.Group();
+  // Body
+  const bodyGeo = new THREE.CylinderGeometry(0.3,0.35,1.4,8);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x334433 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.9;
+  g.add(body);
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.28,8,7);
+  const headMat = new THREE.MeshLambertMaterial({ color: 0xddaa88 });
+  const head = new THREE.Mesh(headGeo, headMat);
+  head.position.y = 1.85;
+  g.add(head);
+  // Hat
+  const hatGeo = new THREE.CylinderGeometry(0.2,0.3,0.3,8);
+  const hatMat = new THREE.MeshLambertMaterial({ color: 0x223322 });
+  const hat = new THREE.Mesh(hatGeo, hatMat);
+  hat.position.y = 2.1;
+  g.add(hat);
+  // Flashlight spot
+  const gLight = new THREE.SpotLight(0xfffbcc, 1.2, 15, Math.PI*0.1, 0.5, 1);
+  gLight.castShadow = false;
+  g.add(gLight);
+  g.add(gLight.target);
+  gLight.target.position.set(0,0,5);
+
+  // Detection cone visual
+  const coneGeo = new THREE.ConeGeometry(3,8,12,1,true);
+  const coneMat = new THREE.MeshBasicMaterial({color:0xff4400, transparent:true, opacity:0.08, side:THREE.DoubleSide});
+  const cone = new THREE.Mesh(coneGeo, coneMat);
+  cone.rotation.x = Math.PI/2;
+  cone.position.z = 4;
+  cone.position.y = 1.2;
+  g.add(cone);
+
+  const p0 = pathPoints[0];
+  const gy = getGroundY(p0.x,p0.z);
+  g.position.set(p0.x, gy, p0.z);
+  scene.add(g);
+
+  return {
+    group: g, gLight, pathPoints,
+    pathIdx: 0, pathT: 0, speed: 0.008+Math.random()*0.004,
+    detected: false, alertTimer: 0, coneVisible: true,
+    angle: 0
+  };
+}
+
+guardPaths.forEach(pp => guardData.push(makeGuard(pp)));
+
+// ---- PARTICLES (leaves) ----
+const leafCount = 300;
+const leafPositions = new Float32Array(leafCount*3);
+const leafVels = [];
+for(let i=0;i<leafCount;i++){
+  leafPositions[i*3]=(Math.random()-0.5)*MAP_SIZE;
+  leafPositions[i*3+1]=Math.random()*8;
+  leafPositions[i*3+2]=(Math.random()-0.5)*MAP_SIZE;
+  leafVels.push({vx:(Math.random()-0.5)*0.02, vy:-0.01-Math.random()*0.01, vz:(Math.random()-0.5)*0.02});
+}
+const leafGeo = new THREE.BufferGeometry();
+leafGeo.setAttribute('position', new THREE.BufferAttribute(leafPositions, 3));
+const leafMat = new THREE.PointsMaterial({ color: 0x88cc44, size: 0.15, transparent: true, opacity: 0.6 });
+const leaves = new THREE.Points(leafGeo, leafMat);
+scene.add(leaves);
+
+// ---- SKY ----
+const skyGeo = new THREE.SphereGeometry(190, 16, 8);
+const skyMat = new THREE.MeshBasicMaterial({ color: 0x040d04, side: THREE.BackSide });
+const sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// Stars
+const starCount = 1000;
+const starPos = new Float32Array(starCount*3);
+for(let i=0;i<starCount;i++){
+  const theta=Math.random()*Math.PI*2, phi=Math.random()*Math.PI;
+  const r=180;
+  starPos[i*3]=r*Math.sin(phi)*Math.cos(theta);
+  starPos[i*3+1]=Math.abs(r*Math.cos(phi));
+  starPos[i*3+2]=r*Math.sin(phi)*Math.sin(theta);
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 0.9 });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// Moon
+const moonGeo = new THREE.SphereGeometry(3,16,12);
+const moonMat = new THREE.MeshBasicMaterial({ color: 0xddddcc });
+const moon = new THREE.Mesh(moonGeo, moonMat);
+moon.position.set(-100, 100, -100);
+scene.add(moon);
+
+// ---- MINIMAP ----
+const mmCanvas = document.getElementById('minimap-canvas');
+const mmCtx = mmCanvas.getContext('2d');
+
+function drawMinimap(){
+  const cw=180, ch=180;
+  mmCtx.fillStyle='#050f05';
+  mmCtx.fillRect(0,0,cw,ch);
+
+  const scale = cw/(MAP_SIZE*1.2);
+  const ox=cw/2, oy=ch/2;
+  const cx=camera.position.x, cz=camera.position.z;
+
+  function wx(x){ return ox + (x-cx)*scale; }
+  function wy(z){ return oy + (z-cz)*scale; }
+
+  // Trees (small dots)
+  mmCtx.fillStyle='#1a3a1a';
+  treePositions.forEach(t=>{
+    const px=wx(t.x), py=wy(t.z);
+    if(px>0&&px<cw&&py>0&&py<ch){
+      mmCtx.beginPath(); mmCtx.arc(px,py,1.5,0,Math.PI*2); mmCtx.fill();
+    }
+  });
+
+  // Shelters
+  mmCtx.fillStyle='#886633';
+  shelters.forEach(s=>{
+    const px=wx(s.x),py=wy(s.z);
+    mmCtx.fillRect(px-3,py-3,6,6);
+  });
+
+  // Fuel
+  mmCtx.fillStyle='#cc3333';
+  fuelCanisters.forEach(f=>{
+    if(!f.collected){
+      const px=wx(f.x),py=wy(f.z);
+      if(px>0&&px<cw&&py>0&&py<ch){
+        mmCtx.beginPath(); mmCtx.arc(px,py,3,0,Math.PI*2); mmCtx.fill();
+      }
+    }
+  });
+
+  // Generators
+  generators.forEach(g=>{
+    mmCtx.fillStyle = g.powered ? '#88ff00':'#668800';
+    const px=wx(g.x),py=wy(g.z);
+    mmCtx.fillRect(px-4,py-4,8,8);
+  });
+
+  // Guards
+  guardData.forEach(gd=>{
+    const gpos = gd.group.position;
+    const px=wx(gpos.x),py=wy(gpos.z);
+    if(px>0&&px<cw&&py>0&&py<ch){
+      mmCtx.fillStyle = gd.detected ? '#ff0000':'#ff8800';
+      mmCtx.beginPath(); mmCtx.arc(px,py,4,0,Math.PI*2); mmCtx.fill();
+      // View direction
+      mmCtx.strokeStyle = 'rgba(255,150,0,0.4)';
+      mmCtx.lineWidth=1;
+      mmCtx.beginPath();
+      mmCtx.moveTo(px,py);
+      mmCtx.lineTo(px+Math.sin(gd.group.rotation.y)*12, py+Math.cos(gd.group.rotation.y)*12);
+      mmCtx.stroke();
+    }
+  });
+
+  // Player
+  mmCtx.fillStyle='#44ff88';
+  mmCtx.beginPath(); mmCtx.arc(ox,oy,5,0,Math.PI*2); mmCtx.fill();
+  mmCtx.fillStyle='#88ff99';
+  mmCtx.beginPath();
+  mmCtx.moveTo(ox+Math.sin(-yaw)*8,oy+Math.cos(-yaw)*8);
+  mmCtx.arc(ox,oy,3,(-yaw-0.5),(-yaw+0.5));
+  mmCtx.closePath(); mmCtx.fill();
+}
+
+// ---- POINTER LOCK ----
+canvas.addEventListener('click', ()=>{
+  if(!state.gameStarted) return;
+  canvas.requestPointerLock();
+});
+document.addEventListener('pointerlockchange', ()=>{
+  pointerLocked = document.pointerLockElement === canvas;
+});
+document.addEventListener('mousemove', e=>{
+  if(!pointerLocked) return;
+  yaw -= e.movementX*0.002;
+  pitch = Math.max(-1.1, Math.min(0.6, pitch - e.movementY*0.002));
+});
+document.addEventListener('keydown', e=>{ keys[e.code]=true; });
+document.addEventListener('keyup', e=>{ keys[e.code]=false; });
+
+// Key actions (single press)
+document.addEventListener('keydown', e=>{
+  if(!state.gameStarted || state.isDead) return;
+  if(e.code==='KeyF'){
+    state.flashlight = !state.flashlight;
+    document.getElementById('flashlight-icon').className = state.flashlight ? 'on' : '';
+    flashlight.intensity = state.flashlight ? 2.5 : 0;
+    showAlert(state.flashlight ? 'Linterna encendida' : 'Linterna apagada', 'info');
+  }
+  if(e.code==='KeyE'){ interact(); }
+  if(e.code==='Escape' && pointerLocked){ document.exitPointerLock(); }
+});
+
+function interact(){
+  // Check shelter
+  if(state.nearShelter !== null){
+    sleep();
+    return;
+  }
+  // Check fuel
+  if(state.nearFuel !== null){
+    collectFuel(state.nearFuel);
+    return;
+  }
+  // Check generator
+  if(state.nearGenerator !== null){
+    fuelGenerator(state.nearGenerator);
+    return;
+  }
+}
+
+let sleepTimeout = null;
+function sleep(){
+  if(state.sleepAnimating) return;
+  state.sleepAnimating = true;
+  const overlay = document.getElementById('sleep-overlay');
+  overlay.style.display='flex';
+  document.getElementById('sleep-day-num').textContent = `Día ${state.day+1}`;
+
+  state.day++;
+  document.getElementById('day-val').textContent = state.day;
+
+  // Restore stats
+  state.health = Math.min(100, state.health+30);
+  state.hunger = Math.max(0, state.hunger-20);
+  state.stamina = 100;
+  state.timeOfDay = 0.4; // morning
+
+  // Move guards
+  guardData.forEach(gd=>{ gd.detected=false; });
+
+  setTimeout(()=>{
+    overlay.style.display='none';
+    state.sleepAnimating=false;
+    updateHUD();
+    showAlert(`¡Buenos días! Día ${state.day}`, 'info');
+  }, 3000);
+}
+
+function collectFuel(idx){
+  const f = fuelCanisters[idx];
+  if(f.collected) return;
+  f.collected = true;
+  state.fuel = Math.min(100, state.fuel+25);
+  state.totalFuelCollected++;
+  f.group.visible=false;
+  showAlert('Gasolina recogida! +25L', 'info');
+  updateHUD();
+}
+
+function fuelGenerator(idx){
+  const g = generators[idx];
+  if(g.powered){ showAlert('Generador ya está activo', 'info'); return; }
+  if(state.fuel<20){ showAlert('¡Necesitas al menos 20L de gasolina!', 'warn'); return; }
+  state.fuel -= 20;
+  g.powered=true;
+  g.indMat.color.setHex(0x00ff00);
+  g.powerLight.color.setHex(0x00ff44);
+  g.powerLight.intensity=0.8;
+  state.generatorPowered=true;
+  showAlert('¡Generador encendido! Iluminación activa', 'info');
+  // Animate powered lights around generator
+  const ringLight = new THREE.PointLight(0x44ff88, 1.5, 20);
+  ringLight.position.set(g.x, getGroundY(g.x,g.z)+2, g.z);
+  scene.add(ringLight);
+  updateHUD();
+}
+
+// ---- ALERT SYSTEM ----
+function showAlert(msg, type=''){
+  const c=document.getElementById('alerts');
+  const d=document.createElement('div');
+  d.className='alert '+(type||'');
+  d.textContent=msg;
+  c.appendChild(d);
+  setTimeout(()=>d.remove(), 3100);
+}
+
+// ---- HUD ----
+function updateHUD(){
+  document.getElementById('health-fill').style.width=state.health+'%';
+  document.getElementById('health-val').textContent=Math.round(state.health);
+  document.getElementById('hunger-fill').style.width=state.hunger+'%';
+  document.getElementById('hunger-val').textContent=Math.round(state.hunger);
+  document.getElementById('fuel-fill').style.width=state.fuel+'%';
+  document.getElementById('fuel-val').textContent=Math.round(state.fuel)+'/100';
+  document.getElementById('stamina-fill').style.width=state.stamina+'%';
+  document.getElementById('stamina-val').textContent=Math.round(state.stamina);
+}
+
+// ---- DEATH ----
+function die(reason){
+  state.isDead=true;
+  document.getElementById('gameover-reason').textContent=reason;
+  document.getElementById('gameover').style.display='flex';
+  if(pointerLocked) document.exitPointerLock();
+}
+
+function restartGame(){
+  location.reload();
+}
+
+// ---- GAME START ----
+function startGame(){
+  document.getElementById('overlay').style.opacity='0';
+  setTimeout(()=>{ document.getElementById('overlay').style.display='none'; },800);
+  state.gameStarted=true;
+  state.timeOfDay=0.5;
+  // Spawn player
+  camera.position.set(0,getGroundY(0,0)+1.7,0);
+  showAlert('Survive the forest. Find fuel, avoid guards.', 'info');
+  canvas.requestPointerLock();
+  animate();
+}
+
+// ---- COLLISION ----
+function checkCollision(nx, nz){
+  for(const t of treePositions){
+    const dx=nx-t.x, dz=nz-t.z;
+    if(dx*dx+dz*dz < t.r*t.r) return true;
+  }
+  return false;
+}
+
+// ---- GUARD AI ----
+function updateGuards(dt){
+  guardData.forEach(gd=>{
+    if(state.sleepAnimating) return;
+
+    // Path follow
+    const pts = gd.pathPoints;
+    const next = pts[gd.pathIdx];
+    const cur = gd.group.position;
+    const dx = next.x - cur.x, dz = next.z - cur.z;
+    const dist = Math.sqrt(dx*dx+dz*dz);
+
+    if(dist<0.5){
+      gd.pathIdx = (gd.pathIdx+1)%pts.length;
+    } else {
+      const spd = gd.detected ? gd.speed*2.5 : gd.speed;
+      cur.x += (dx/dist)*spd*dt*60;
+      cur.z += (dz/dist)*spd*dt*60;
+    }
+
+    const targetAngle = Math.atan2(dx,dz);
+    gd.group.rotation.y += (targetAngle - gd.group.rotation.y)*0.1;
+
+    const gy = getGroundY(cur.x,cur.z);
+    cur.y = gy;
+
+    // Update spotlight
+    gd.gLight.position.set(0,1.5,0);
+    gd.gLight.target.position.set(0,0,8);
+
+    // Detection
+    const px=camera.position.x, pz=camera.position.z;
+    const pdx=px-cur.x, pdz=pz-cur.z;
+    const pdist=Math.sqrt(pdx*pdx+pdz*pdz);
+
+    // Angle from guard forward to player
+    const guardAngle = Math.atan2(pdx,pdz);
+    const relAngle = guardAngle - gd.group.rotation.y;
+    const normAngle = ((relAngle+Math.PI)%(Math.PI*2))-Math.PI;
+
+    const viewRange = state.flashlight ? 18 : (state.timeOfDay>0.25&&state.timeOfDay<0.75 ? 12 : 8);
+    const fov = state.flashlight ? 0.6 : 0.45;
+
+    if(pdist<viewRange && Math.abs(normAngle)<fov){
+      if(!gd.detected){
+        gd.detected=true;
+        gd.alertTimer=5000;
+        showAlert('¡TE HAN VISTO! ¡CORRE!', 'danger');
+      }
+    }
+
+    if(gd.detected){
+      gd.alertTimer-=dt*1000;
+      // Chase player
+      gd.pathPoints = [{x:px, z:pz}];
+      if(pdist<1.5){
+        state.health -= 0.5*dt*60;
+        if(state.health<=0) die('Un vigilante te atrapó. Días sobrevividos: '+state.day);
+        updateHUD();
+      }
+      if(gd.alertTimer<=0){
+        gd.detected=false;
+        // Restore path
+        gd.pathPoints = guardPaths[guardData.indexOf(gd)];
+      }
+    }
+  });
+}
+
+// ---- LEAF ANIMATION ----
+function updateLeaves(dt){
+  for(let i=0;i<leafCount;i++){
+    const v=leafVels[i];
+    leafPositions[i*3]+=v.vx;
+    leafPositions[i*3+1]+=v.vy;
+    leafPositions[i*3+2]+=v.vz;
+    if(leafPositions[i*3+1]<0){
+      leafPositions[i*3+1]=6+Math.random()*4;
+      leafPositions[i*3]=(Math.random()-0.5)*MAP_SIZE;
+      leafPositions[i*3+2]=(Math.random()-0.5)*MAP_SIZE;
+    }
+    v.vx+=(Math.random()-0.5)*0.001;
+    v.vz+=(Math.random()-0.5)*0.001;
+  }
+  leafGeo.attributes.position.needsUpdate=true;
+}
+
+// ---- INTERACTION PROXIMITY ----
+function checkProximity(){
+  const px=camera.position.x, pz=camera.position.z;
+  let nearShelter=null, nearFuel=null, nearGen=null;
+
+  shelters.forEach((s,i)=>{
+    const d=Math.sqrt((px-s.x)**2+(pz-s.z)**2);
+    if(d<s.radius) nearShelter=i;
+  });
+  fuelCanisters.forEach((f,i)=>{
+    if(!f.collected){
+      const d=Math.sqrt((px-f.x)**2+(pz-f.z)**2);
+      if(d<f.radius) nearFuel=i;
+    }
+  });
+  generators.forEach((g,i)=>{
+    const d=Math.sqrt((px-g.x)**2+(pz-g.z)**2);
+    if(d<g.radius) nearGen=i;
+  });
+
+  state.nearShelter=nearShelter;
+  state.nearFuel=nearFuel;
+  state.nearGenerator=nearGen;
+
+  const prompt=document.getElementById('interact-prompt');
+  if(nearShelter!==null){
+    prompt.style.display='block';
+    prompt.textContent='[E] Dormir en el refugio';
+  } else if(nearFuel!==null){
+    prompt.style.display='block';
+    prompt.textContent='[E] Recoger gasolina';
+  } else if(nearGen!==null){
+    const g=generators[nearGen];
+    prompt.style.display='block';
+    prompt.textContent=g.powered?'Generador activo':'[E] Encender generador (20L)';
+  } else {
+    prompt.style.display='none';
+  }
+}
+
+// ---- DAY/NIGHT CYCLE ----
+function updateDayNight(dt){
+  state.timeOfDay += dt*0.008; // full cycle ~125s
+  if(state.timeOfDay>=1) state.timeOfDay=0;
+
+  const t=state.timeOfDay;
+  const dayPhase = Math.sin(t*Math.PI);
+
+  // Sky color
+  const nightSky = new THREE.Color(0x020805);
+  const dawnSky = new THREE.Color(0x1a0a05);
+  const daySky = new THREE.Color(0x0a1a0a);
+
+  let skyColor;
+  if(t<0.25) skyColor=nightSky.clone().lerp(dawnSky, t/0.25);
+  else if(t<0.5) skyColor=dawnSky.clone().lerp(daySky, (t-0.25)/0.25);
+  else if(t<0.75) skyColor=daySky.clone().lerp(dawnSky, (t-0.5)/0.25);
+  else skyColor=dawnSky.clone().lerp(nightSky, (t-0.75)/0.25);
+
+  skyMat.color.copy(skyColor);
+  scene.fog.color.copy(skyColor);
+  scene.fog.density = 0.025 + (1-dayPhase)*0.015;
+
+  // Sun/Moon intensity
+  const sunIntensity = Math.max(0, Math.sin(t*Math.PI)*0.8);
+  sunLight.intensity = sunIntensity;
+  ambientLight.intensity = 0.1 + sunIntensity*0.3;
+
+  if(t<0.5){
+    sunLight.color.setHex(t<0.2 ? 0x6677aa : 0x8899ff);
+  } else {
+    sunLight.color.setHex(t>0.8 ? 0x6677aa : 0x8899ff);
+  }
+
+  // Stars visibility
+  starMat.opacity = Math.max(0, 0.9-dayPhase*1.5);
+
+  // Time display
+  const hours = Math.floor(t*24);
+  const mins = Math.floor((t*24%1)*60);
+  document.getElementById('time-txt').textContent =
+    String(hours).padStart(2,'0')+':'+String(mins).padStart(2,'0');
+  document.getElementById('time-fill').style.width=(t*100)+'%';
+
+  // Generator lights pulse
+  generators.forEach(g=>{
+    if(g.powered){
+      g.powerLight.intensity = 0.8 + Math.sin(Date.now()*0.003)*0.2;
+    }
+  });
+
+  // Fuel canister bob
+  fuelCanisters.forEach(f=>{
+    if(!f.collected){
+      f.group.position.y = getGroundY(f.x,f.z) + Math.sin(Date.now()*0.002+f.i)*0.1;
+      f.group.rotation.y += 0.01;
+    }
+  });
+}
+
+// ---- PLAYER UPDATE ----
+const moveDir = new THREE.Vector3();
+const forward = new THREE.Vector3();
+const right = new THREE.Vector3();
+let lastTime=null, walkCycle=0;
+
+function updatePlayer(dt){
+  if(state.isDead||state.sleepAnimating) return;
+
+  state.running = keys['ShiftLeft']||keys['ShiftRight'];
+
+  moveDir.set(0,0,0);
+  forward.set(Math.sin(yaw),0,Math.cos(yaw));
+  right.set(Math.cos(yaw),0,-Math.sin(yaw));
+
+  if(keys['KeyW']||keys['ArrowUp']) moveDir.addScaledVector(forward,-1);
+  if(keys['KeyS']||keys['ArrowDown']) moveDir.addScaledVector(forward,1);
+  if(keys['KeyA']||keys['ArrowLeft']) moveDir.addScaledVector(right,-1);
+  if(keys['KeyD']||keys['ArrowRight']) moveDir.addScaledVector(right,1);
+
+  const moving = moveDir.lengthSq()>0;
+
+  if(moving){
+    moveDir.normalize();
+    const speed = state.running ? 8 : 4;
+    const nx = camera.position.x + moveDir.x*speed*dt;
+    const nz = camera.position.z + moveDir.z*speed*dt;
+
+    if(!checkCollision(nx,nz)){
+      camera.position.x=nx;
+      camera.position.z=nz;
+    }
+    walkCycle += dt*(state.running?8:4);
+  }
+
+  // Ground follow
+  const gy=getGroundY(camera.position.x,camera.position.z);
+  camera.position.y=gy+1.7+Math.sin(walkCycle)*0.06*(moving?1:0);
+
+  // Camera rotation
+  camera.rotation.order='YXZ';
+  camera.rotation.y=yaw;
+  camera.rotation.x=pitch;
+
+  // Flashlight follows camera
+  if(state.flashlight){
+    flashlight.position.copy(camera.position);
+    const lookDir=new THREE.Vector3(0,0,-1);
+    lookDir.applyEuler(camera.rotation);
+    flashlight.target.position.copy(camera.position).addScaledVector(lookDir,10);
+    flashlight.target.updateMatrixWorld();
+  }
+
+  // Stamina
+  if(state.running&&moving){
+    state.stamina=Math.max(0,state.stamina-20*dt);
+    if(state.stamina<=0) state.running=false;
+  } else {
+    state.stamina=Math.min(100,state.stamina+8*dt);
+  }
+
+  // Hunger drain
+  state.hunger=Math.max(0,state.hunger-1.5*dt);
+  if(state.hunger<=0){
+    state.health=Math.max(0,state.health-5*dt);
+    if(state.health<=0) die('Moriste de hambre. Días: '+state.day);
+  }
+
+  // Night cold damage
+  if(state.timeOfDay<0.2||state.timeOfDay>0.8){
+    if(!state.generatorPowered){
+      state.health=Math.max(0,state.health-1*dt);
+      if(state.health<=0) die('Moriste de frío en la noche. Días: '+state.day);
+    }
+  }
+
+  updateHUD();
+}
+
+// ---- MAIN LOOP ----
+let running=false;
+function animate(){
+  if(!running){ running=true; }
+  requestAnimationFrame(animate);
+
+  const now=performance.now();
+  const dt=lastTime?Math.min((now-lastTime)/1000,0.05):0.016;
+  lastTime=now;
+
+  if(!state.gameStarted||state.isDead) return;
+
+  updatePlayer(dt);
+  updateGuards(dt);
+  updateLeaves(dt);
+  updateDayNight(dt);
+  checkProximity();
+  drawMinimap();
+
+  renderer.render(scene, camera);
+}
+
+// ---- RESIZE ----
+window.addEventListener('resize',()=>{
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+// Start rendering immediately for the overlay background
+(function bgRender(){
+  requestAnimationFrame(bgRender);
+  if(state.gameStarted) return;
+  state.timeOfDay+=0.0001;
+  updateDayNight(0.016);
+  renderer.render(scene,camera);
+})();
+</script>
+</body>
+</html>
